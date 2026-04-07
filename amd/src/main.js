@@ -1,237 +1,185 @@
 define([], function() {
 
-    let blocked = false;
-    let lastHiddenTime = 0;
+    let isExamFinished = false;
+    let violationCount = 0;
 
     return {
-        init: function(user) {
+        init: function() {
+            console.log("🚀 SUT Exam Protector: Ultimate Fullscreen Mode Active");
 
-            console.log("SUT Exam Protector Active", user);
+            this.injectStrictStyles();
 
-            // ==============================
-            // ❌ BASIC BLOCK
-            // ==============================
+            // 1. บล็อกการทำงานพื้นฐาน
             document.addEventListener('contextmenu', e => e.preventDefault());
-            ['copy','paste','cut'].forEach(ev => 
+            ['copy', 'paste', 'cut', 'dragstart', 'drop'].forEach(ev =>
                 document.addEventListener(ev, e => e.preventDefault())
             );
             document.body.style.userSelect = "none";
 
-            // ==============================
-            // ❌ KEYBOARD CONTROL
-            // ==============================
-            document.addEventListener("keydown", function(e) {
+            // 2. ตั้งค่าปุ่มเริ่ม
+            this.setupStartButton();
 
-                // F12 → BLOCK
-                if (e.key === "F12") {
+            // 3. ตรวจจับการหลุด Fullscreen
+            document.addEventListener("fullscreenchange", () => {
+                if (!document.fullscreenElement && !isExamFinished) {
+                    this.handleViolation();
+                }
+            });
+
+            // 4. ป้องกันการกดย้อนกลับ
+            this.preventBackNavigation();
+
+            // 5. ดักจับการปิด Tab
+            window.onbeforeunload = (e) => {
+                if (!isExamFinished) {
                     e.preventDefault();
-                    degradeScreen("F12");
+                    return "คำเตือน: การออกจากหน้าจอนี้จะทำให้การสอบเป็นโมฆะ";
                 }
+            };
 
-                // Ctrl shortcuts → BLOCK
-                if (e.ctrlKey && ['c','v','u','s','a','p'].includes(e.key.toLowerCase())) {
-                    e.preventDefault();
+            this.observeSubmitButton();
+        },
+
+        injectStrictStyles: function() {
+            const style = document.createElement('style');
+            style.innerHTML = `
+                ::-webkit-scrollbar { display: none; }
+                html, body { 
+                    overflow: hidden !important; 
+                    height: 100vh !important; 
+                    width: 100vw !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    -ms-overflow-style: none; 
+                    scrollbar-width: none; 
                 }
-
-                // Shift + S → temporary blur
-                if (e.shiftKey && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === "s") {
-                    e.preventDefault();
-                    temporaryBlur("SHIFT_S");
+                #custom-alert-overlay {
+                    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+                    background: rgba(0,0,0,0.85); z-index: 10000000;
+                    display: flex; justify-content: center; align-items: center;
                 }
+            `;
+            document.head.appendChild(style);
+        },
+
+        setupStartButton: function() {
+            let overlay = document.createElement("div");
+            overlay.id = "exam-overlay";
+            overlay.innerHTML = `
+                <div style="text-align:center; background:white; padding:40px; border-radius:20px; box-shadow: 0 0 20px rgba(0,0,0,0.5);">
+                    <h1 style="color:#333; margin-bottom:10px;">เตรียมพร้อมสำหรับการสอบ</h1>
+                    <p style="color:#666;">ระบบจะเข้าสู่โหมดเต็มจอและปิดการใช้งาน Navbar</p>
+                    <button id="enter-btn" style="padding:15px 40px; font-size:22px; cursor:pointer; background:#28a745; color:white; border:none; border-radius:10px; margin-top:20px; font-weight:bold;">
+                        เริ่มทำข้อสอบทันที
+                    </button>
+                </div>
+            `;
+            Object.assign(overlay.style, {
+                position: "fixed", top: "0", left: "0", width: "100vw", height: "100vh",
+                background: "rgba(0,0,0,0.9)", zIndex: "9999999", display: "flex", justifyContent: "center", alignItems: "center"
             });
+            document.body.appendChild(overlay);
 
-            // ==============================
-            // 🔍 PRINT SCREEN → temporary blur
-            // ==============================
-            document.addEventListener("keyup", function(e) {
-                if (e.key === "PrintScreen") temporaryBlur("PRINT_SCREEN");
-            });
+            document.getElementById("enter-btn").onclick = () => {
+                this.forceFullscreen();
+                overlay.remove();
+                history.pushState(null, null, location.href);
+            };
+        },
 
-            // ==============================
-            // 🔍 TAB SWITCH / WINDOW BLUR
-            // ==============================
-            window.addEventListener('blur', () => temporaryBlur("WINDOW_BLUR", 2000));
+        forceFullscreen: function() {
+            let elem = document.documentElement;
+            if (elem.requestFullscreen) {
+                elem.requestFullscreen().catch(err => console.log("FS Error:", err));
+            } else if (elem.webkitRequestFullscreen) {
+                elem.webkitRequestFullscreen().catch(err => console.log("FS Error:", err));
+            }
+        },
 
-            document.addEventListener("visibilitychange", function() {
-                if (document.hidden) lastHiddenTime = Date.now();
-                else {
-                    let diff = Date.now() - lastHiddenTime;
-                    if (diff < 1500) temporaryBlur("FAST_TAB_SWITCH", 2000);
-                }
-            });
+        showCustomWarning: function(title, message) {
+            if (document.getElementById("custom-alert-overlay")) return;
 
-            // ==============================
-            // 🔒 FORCE FULLSCREEN
-            // ==============================
-            setTimeout(() => document.documentElement.requestFullscreen().catch(()=>{}), 1000);
+            let warningDiv = document.createElement("div");
+            warningDiv.id = "custom-alert-overlay";
+            warningDiv.innerHTML = `
+                <div style="background: white; padding: 30px; border-radius: 15px; text-align: center; box-shadow: 0 0 30px rgba(0,0,0,0.5); max-width: 450px; border: 3px solid #ff4d4d;">
+                    <h2 style="color: #ff4d4d; margin-top: 0; font-size: 24px;">${title}</h2>
+                    <p style="color: #333; font-size: 18px; line-height: 1.5;">${message}</p>
+                    <button id="confirm-re-fs" style="margin-top: 20px; padding: 15px 35px; font-size: 20px; background: #007bff; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;">
+                        ตกลง (กลับเข้าสู่การสอบ)
+                    </button>
+                </div>
+            `;
+            document.body.appendChild(warningDiv);
 
-            document.addEventListener("fullscreenchange", function() {
-                if (!document.fullscreenElement) degradeScreen("EXIT_FULLSCREEN");
-            });
+            document.getElementById("confirm-re-fs").onclick = () => {
+                this.forceFullscreen();
+                warningDiv.remove();
+            };
+        },
 
-            // ==============================
-            // 🔍 DEVTOOLS DETECTION
-            // ==============================
-            setInterval(function() {
-                if (window.outerWidth - window.innerWidth > 160) degradeScreen("DEVTOOLS_SIZE");
-            }, 1000);
+        handleViolation: function() {
+            violationCount++;
+            if (violationCount === 1) {
+                this.showCustomWarning(
+                    "⚠️ เตือนครั้งที่ 1: ตรวจพบการออกจากหน้าจอ!",
+                    "ไม่อนุญาตให้ออกจากโหมดเต็มจอระหว่างทำข้อสอบ <br><b>หากทำผิดอีกครั้ง คุณจะหมดสิทธิ์สอบทันที</b>"
+                );
+            } 
+            else if (violationCount >= 2) {
+                this.autoTerminate();
+            }
+        },
 
-            // debugger trap
-            setInterval(function() {
-                let before = performance.now();
-                debugger;
-                let after = performance.now();
-                if (after - before > 150) degradeScreen("DEBUGGER");
+        // --- ส่วนที่ปรับปรุง: เด้งไปหน้า Home ทันที ---
+        autoTerminate: function() {
+            isExamFinished = true;
+            
+            // ล้างหน้าจอทันทีเพื่อความปลอดภัย
+            document.body.innerHTML = "";
+            document.body.style.background = "#fff";
+            document.body.style.display = "flex";
+            document.body.style.justifyContent = "center";
+            document.body.style.alignItems = "center";
+            
+            // แสดงข้อความสั้นๆ ก่อนเด้ง
+            document.body.innerHTML = `<h1 style="color:red; text-align:center; font-family: sans-serif;">🚫 คุณหมดสิทธิ์สอบและกำลังถูกส่งกลับหน้าหลัก...</h1>`;
+            
+            // ปิด Fullscreen (ถ้าค้างอยู่)
+            if (document.fullscreenElement) {
+                document.exitFullscreen().catch(() => {});
+            }
+
+            // เด้งไปหน้า Home หลังจากผ่านไป 2 วินาที (หรือเปลี่ยนเป็น '/' ทันทีได้เลย)
+            setTimeout(() => {
+                window.location.href = "/"; // แก้ไขเป็น URL หน้า Home ของคุณ เช่น "/home" หรือ "/"
             }, 2000);
+        },
 
-            // ==============================
-            // 🔥 NOISE
-            // ==============================
-            addNoise();
+        preventBackNavigation: function() {
+            window.onpopstate = () => {
+                if (!isExamFinished) {
+                    alert("🚫 ไม่อนุญาตให้กดย้อนกลับระหว่างการสอบ!");
+                    history.pushState(null, null, location.href);
+                }
+            };
+        },
 
-            // ==============================
-            // 🔥 WATERMARK (ไม่รบกวนผู้สอบ)
-            // ==============================
-            addWatermark(user);
-
-            // ==============================
-            // 🔥 PROTECT ANSWER CHOICES
-            // ==============================
-            protectChoices();
+        observeSubmitButton: function() {
+            document.addEventListener('click', (e) => {
+                let btn = e.target.closest('button, input[type="submit"]');
+                if (!btn) return;
+                
+                let text = (btn.innerText || btn.value || "").toLowerCase();
+                
+                if (["finish", "submit", "ส่ง", "เสร็จ"].some(kw => text.includes(kw))) {
+                    isExamFinished = true;
+                    document.body.style.overflow = "auto";
+                    if (document.fullscreenElement) {
+                        document.exitFullscreen().catch(() => {});
+                    }
+                }
+            });
         }
     };
-
-    // ==============================
-    // 🔴 PUNISH FUNCTION (BLOCK)
-    // ==============================
-    function degradeScreen(reason) {
-
-        if (blocked) return;
-        blocked = true;
-
-        console.warn("CHEAT DETECTED:", reason);
-
-        document.body.style.filter = "blur(20px) brightness(0.3)";
-        document.body.style.pointerEvents = "none";
-
-        let block = document.createElement("div");
-        block.id = "exam-blocked";
-
-        block.innerHTML = `
-            <div style="
-                display:flex;
-                justify-content:center;
-                align-items:center;
-                height:100%;
-                flex-direction:column;
-                color:red;
-                font-size:28px;
-            ">
-                <h1>คุณถูกระงับการสอบ</h1>
-                <p>Reason: ${reason}</p>
-            </div>
-        `;
-
-        block.style.position = "fixed";
-        block.style.top = 0;
-        block.style.left = 0;
-        block.style.width = "100%";
-        block.style.height = "100%";
-        block.style.background = "rgba(0,0,0,0.9)";
-        block.style.zIndex = 99999;
-
-        document.body.appendChild(block);
-
-        // 🔥 log กลับ server
-        try {
-            fetch('/local/sutexam_protector/log.php', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({reason, time: new Date().toISOString()})
-            });
-        } catch(e) {}
-    }
-
-    // ==============================
-    // 🔥 TEMPORARY BLUR FUNCTION
-    // ==============================
-    function temporaryBlur(reason, duration = 2000) {
-        console.warn("SCREEN CAP DETECTED:", reason);
-        document.querySelectorAll('.qtext').forEach(el => el.style.filter = 'blur(8px)');
-        try {
-            fetch('/local/sutexam_protector/log.php', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({reason, time: new Date().toISOString()})
-            });
-        } catch(e) {}
-        setTimeout(() => document.querySelectorAll('.qtext').forEach(el => el.style.filter = ''), duration);
-    }
-
-    // ==============================
-    // 🔥 NOISE OVERLAY
-    // ==============================
-    function addNoise() {
-        let noise = document.createElement("div");
-        noise.style.position = "fixed";
-        noise.style.top = 0;
-        noise.style.left = 0;
-        noise.style.width = "100%";
-        noise.style.height = "100%";
-        noise.style.backgroundImage =
-            "repeating-radial-gradient(circle, rgba(0,0,0,0.05) 1px, transparent 1px)";
-        noise.style.pointerEvents = "none";
-        noise.style.zIndex = 9998;
-        document.body.appendChild(noise);
-    }
-
-    // ==============================
-    // 🔥 WATERMARK (ไม่รบกวนผู้สอบ)
-    // ==============================
-function addWatermark(user) {
-    if (!user) user = {};
-
-    let name = user.fullname || `${user.firstname || "ห้ามคัดลอกหน้าจอ!"} ${user.lastname || ""}`;
-    let id = user.id || "0";
-    let timestamp = new Date().toLocaleString();
-
-    for (let i = 0; i < 15; i++) {
-        let wm = document.createElement("div");
-        wm.innerText = `${name} | ${id} | ${timestamp}`;
-
-        wm.style.position = "fixed";
-        wm.style.top = Math.random() * 90 + "%";
-        wm.style.left = Math.random() * 90 + "%";
-        wm.style.opacity = 0.35;
-        wm.style.fontSize = (14 + Math.random() * 4) + "px";
-        wm.style.color = "rgba(80, 70, 70, 0.35)";
-        wm.style.pointerEvents = "none";
-        wm.style.zIndex = 9999;
-        wm.style.whiteSpace = "nowrap";
-        wm.style.transform = `rotate(${Math.random() * 30 - 15}deg)`;
-
-        document.body.appendChild(wm);
-    }
-}
-
-    // ==============================
-    // 🔥 PROTECT ANSWER CHOICES
-    // ==============================
-    function protectChoices() {
-        document.querySelectorAll('.answer').forEach(el => {
-            el.style.position = "relative";
-
-            let overlay = document.createElement("div");
-            overlay.style.position = "absolute";
-            overlay.style.top = 0;
-            overlay.style.left = 0;
-            overlay.style.width = "100%";
-            overlay.style.height = "100%";
-            overlay.style.zIndex = 10;
-            overlay.style.pointerEvents = "none"; // ไม่ขัดคลิก
-
-            el.appendChild(overlay);
-        });
-    }
-
 });
