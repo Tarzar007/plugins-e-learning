@@ -5,7 +5,7 @@ define([], function() {
 
     return {
         init: function() {
-            console.log("🚀 SUT Exam Protector: Ultimate Fullscreen Mode Active");
+            console.log("🚀 SUT Exam Protector: Active for Moodle 5.1");
 
             this.injectStrictStyles();
 
@@ -131,29 +131,51 @@ define([], function() {
             }
         },
 
-        // --- ส่วนที่ปรับปรุง: เด้งไปหน้า Home ทันที ---
+        // --- ส่วนที่แก้ไขปัญหา attempt และ sesskey สำหรับ Moodle 5.1 ---
         autoTerminate: function() {
+            if (isExamFinished) return;
             isExamFinished = true;
-            
-            // ล้างหน้าจอทันทีเพื่อความปลอดภัย
-            document.body.innerHTML = "";
-            document.body.style.background = "#fff";
-            document.body.style.display = "flex";
-            document.body.style.justifyContent = "center";
-            document.body.style.alignItems = "center";
-            
-            // แสดงข้อความสั้นๆ ก่อนเด้ง
-            document.body.innerHTML = `<h1 style="color:red; text-align:center; font-family: sans-serif;">🚫 คุณหมดสิทธิ์สอบและกำลังถูกส่งกลับหน้าหลัก...</h1>`;
-            
-            // ปิด Fullscreen (ถ้าค้างอยู่)
-            if (document.fullscreenElement) {
-                document.exitFullscreen().catch(() => {});
-            }
 
-            // เด้งไปหน้า Home หลังจากผ่านไป 2 วินาที (หรือเปลี่ยนเป็น '/' ทันทีได้เลย)
-            setTimeout(() => {
-                window.location.href = "/"; // แก้ไขเป็น URL หน้า Home ของคุณ เช่น "/home" หรือ "/"
-            }, 2000);
+            document.body.innerHTML = `
+                <div style="background:#fff; height:100vh; display:flex; flex-direction:column; justify-content:center; align-items:center; font-family:sans-serif; text-align:center; padding:20px;">
+                    <h1 style="color:#d9534f; font-size:40px;">🚫 ยุติการสอบทันที</h1>
+                    <p style="font-size:20px; color:#555;">ตรวจพบการฝ่าฝืนกฎ (ออกจากหน้าจอเกินกำหนด) <br>ระบบกำลังส่งข้อมูลและปิดการสอบของคุณ...</p>
+                </div>`;
+
+            // ดึงค่าจากระบบ Moodle
+            const sesskey = M.cfg.sesskey; 
+            const urlParams = new URLSearchParams(window.location.search);
+            const attemptId = urlParams.get('attempt');
+            const cmid = urlParams.get('cmid');
+
+            const responseForm = document.getElementById('responseform');
+
+            if (responseForm && attemptId) {
+                // ตรวจสอบและเพิ่ม sesskey เข้าไปในฟอร์ม
+                if (!responseForm.querySelector('input[name="sesskey"]')) {
+                    const sessInput = document.createElement('input');
+                    sessInput.type = 'hidden';
+                    sessInput.name = 'sesskey';
+                    sessInput.value = sesskey;
+                    responseForm.appendChild(sessInput);
+                }
+
+                // เพิ่ม input บังคับจบการสอบ
+                const finishInput = document.createElement('input');
+                finishInput.type = 'hidden';
+                finishInput.name = 'finishattempt';
+                finishInput.value = '1';
+                responseForm.appendChild(finishInput);
+
+                // ส่งฟอร์มเพื่อบันทึกและปิด Attempt
+                responseForm.submit();
+            } else if (attemptId && cmid) {
+                // กรณีหาฟอร์มไม่เจอ ให้ยิง URL ตรงๆ
+                window.location.href = `processattempt.php?attempt=${attemptId}&cmid=${cmid}&finishattempt=1&timeup=1&sesskey=${sesskey}`;
+            } else {
+                // กรณีฉุกเฉิน ย้อนกลับหน้าหลักของคอร์ส
+                window.location.href = M.cfg.wwwroot;
+            }
         },
 
         preventBackNavigation: function() {
