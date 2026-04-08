@@ -132,50 +132,60 @@ define([], function() {
         },
 
         // --- ส่วนที่แก้ไขปัญหา attempt และ sesskey สำหรับ Moodle 5.1 ---
-        autoTerminate: function() {
+       autoTerminate: function() {
             if (isExamFinished) return;
             isExamFinished = true;
 
+            // 1. ปิดตัวแจ้งเตือน "คุณต้องการออกจากหน้านี้หรือไม่" ของ Browser ทันที
+            window.onbeforeunload = null;
+
+            // 2. ปลดล็อคโหมดเต็มจอและคืนค่าหน้าจอปกติ
+            if (document.fullscreenElement || document.webkitFullscreenElement) {
+                document.exitFullscreen().catch(() => {});
+            }
+            
+            document.documentElement.classList.remove('locked');
+            document.body.classList.remove('locked');
+            document.documentElement.style.overflow = "auto";
+            document.body.style.overflow = "auto";
+
+            // 3. แสดง UI แจ้งเตือนในหน้าปกติ
             document.body.innerHTML = `
-                <div style="background:#fff; height:100vh; display:flex; flex-direction:column; justify-content:center; align-items:center; font-family:sans-serif; text-align:center; padding:20px;">
-                    <h1 style="color:#d9534f; font-size:40px;">🚫 ยุติการสอบทันที</h1>
-                    <p style="font-size:20px; color:#555;">ตรวจพบการฝ่าฝืนกฎ (ออกจากหน้าจอเกินกำหนด) <br>ระบบกำลังส่งข้อมูลและปิดการสอบของคุณ...</p>
+                <div style="background:#f8d7da; height:100vh; display:flex; flex-direction:column; justify-content:center; align-items:center; font-family:sans-serif; text-align:center; padding:20px;">
+                    <h1 style="color:#721c24; font-size:32px;">🚫 ยุติการสอบเรียบร้อยแล้ว</h1>
+                    <p style="font-size:18px; color:#721c24;">ระบบกำลังนำคุณกลับไปยังหน้าสรุปผลสอบ...</p>
                 </div>`;
 
-            // ดึงค่าจากระบบ Moodle
             const sesskey = M.cfg.sesskey; 
             const urlParams = new URLSearchParams(window.location.search);
             const attemptId = urlParams.get('attempt');
             const cmid = urlParams.get('cmid');
-
             const responseForm = document.getElementById('responseform');
 
-            if (responseForm && attemptId) {
-                // ตรวจสอบและเพิ่ม sesskey เข้าไปในฟอร์ม
-                if (!responseForm.querySelector('input[name="sesskey"]')) {
-                    const sessInput = document.createElement('input');
-                    sessInput.type = 'hidden';
-                    sessInput.name = 'sesskey';
-                    sessInput.value = sesskey;
-                    responseForm.appendChild(sessInput);
+            // 4. ใช้ setTimeout เพื่อให้ Browser มีจังหวะเปลี่ยน UI ก่อนจะเด้งหน้า
+            setTimeout(() => {
+                if (responseForm && attemptId) {
+                    if (!responseForm.querySelector('input[name="sesskey"]')) {
+                        const sessInput = document.createElement('input');
+                        sessInput.type = 'hidden';
+                        sessInput.name = 'sesskey';
+                        sessInput.value = sesskey;
+                        responseForm.appendChild(sessInput);
+                    }
+                    const finishInput = document.createElement('input');
+                    finishInput.type = 'hidden';
+                    finishInput.name = 'finishattempt';
+                    finishInput.value = '1';
+                    responseForm.appendChild(finishInput);
+                    
+                    responseForm.submit();
+                } else if (attemptId && cmid) {
+                    // หากไม่มีฟอร์ม ให้กระโดดไปหน้าประมวลผลโดยตรง
+                    window.location.href = `processattempt.php?attempt=${attemptId}&cmid=${cmid}&finishattempt=1&timeup=1&sesskey=${sesskey}`;
+                } else {
+                    window.location.href = M.cfg.wwwroot;
                 }
-
-                // เพิ่ม input บังคับจบการสอบ
-                const finishInput = document.createElement('input');
-                finishInput.type = 'hidden';
-                finishInput.name = 'finishattempt';
-                finishInput.value = '1';
-                responseForm.appendChild(finishInput);
-
-                // ส่งฟอร์มเพื่อบันทึกและปิด Attempt
-                responseForm.submit();
-            } else if (attemptId && cmid) {
-                // กรณีหาฟอร์มไม่เจอ ให้ยิง URL ตรงๆ
-                window.location.href = `processattempt.php?attempt=${attemptId}&cmid=${cmid}&finishattempt=1&timeup=1&sesskey=${sesskey}`;
-            } else {
-                // กรณีฉุกเฉิน ย้อนกลับหน้าหลักของคอร์ส
-                window.location.href = M.cfg.wwwroot;
-            }
+            }, 1000); // หน่วงเวลา 1 วินาทีเพื่อให้มั่นใจว่าหน้าจอปกติขึ้นมาแล้ว
         },
 
         preventBackNavigation: function() {
