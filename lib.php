@@ -7,16 +7,14 @@ defined('MOODLE_INTERNAL') || die();
 function local_sutexam_protector_coursemodule_standard_elements($formwrapper, $mform) {
     if ($formwrapper->get_coursemodule() && $formwrapper->get_coursemodule()->modname === 'quiz') {
 
-        $mform->addElement('header', 'sutexam_protector_hdr', 'SUT Exam Protector Settings');
+// จากเดิมที่เป็นข้อความดิบๆ
+$mform->addElement('header', 'sutexam_protector_hdr', get_string('sutexam_protector_hdr', 'local_sutexam_protector'));
 
-        // ปุ่มเปิด/ปิดระบบ
-        $mform->addElement('selectyesno', 'sutenabled', 'เปิดใช้งานระบบป้องกัน SUT Exam Protector');
-        $mform->setDefault('sutenabled', 0);
+$mform->addElement('selectyesno', 'sutenabled', get_string('sutenabled', 'local_sutexam_protector'));
+$mform->addHelpButton('sutenabled', 'sutenabled', 'local_sutexam_protector');
 
-        // ช่องกรอกรหัสผ่านสำหรับหยุดสอบ
-        $mform->addElement('text', 'sutpassword', 'รหัสผ่านสำหรับหยุดสอบ', array('size' => '20'));
-        $mform->setType('sutpassword', PARAM_TEXT);
-        
+$mform->addElement('text', 'sutpassword', get_string('sutpassword', 'local_sutexam_protector'), array('size' => '20'));
+$mform->addHelpButton('sutpassword', 'sutpassword', 'local_sutexam_protector');
         // แสดงช่องกรอกรหัสเฉพาะเมื่อเลือก "Yes" ใน sutenabled
         $mform->hideIf('sutpassword', 'sutenabled', 'eq', 0);
     }

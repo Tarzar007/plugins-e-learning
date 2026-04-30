@@ -38,8 +38,8 @@ define(['jquery', 'core/log', 'https://cdn.jsdelivr.net/npm/sweetalert2@11'], fu
             this.setupStartButton();
             this.createPauseButton();
             this.removeBackButtons();
+            this.createClockWidget();
 
-            // ตรวจจับการหลุด fullscreen ทันที ไม่ว่าจะเกิดจาก F11, ESC หรืออื่นๆ
             const checkFullscreen = () => {
                 if (isExamFinished) return;
                 const isFS = document.fullscreenElement ||
@@ -48,7 +48,7 @@ define(['jquery', 'core/log', 'https://cdn.jsdelivr.net/npm/sweetalert2@11'], fu
                              document.msFullscreenElement;
 
                 if (!isFS) {
-                    // ล็อคหน้าจอทันที ไม่ว่า Swal จะแสดงอยู่หรือไม่
+     
                     this.handleViolation("คุณออกจากโหมดเต็มจอ", "กรุณากลับเข้าสู่หน้าจอสอบเพื่อทำข้อสอบต่อ");
                 }
             };
@@ -59,7 +59,6 @@ define(['jquery', 'core/log', 'https://cdn.jsdelivr.net/npm/sweetalert2@11'], fu
 
             this.lockNavigation();
 
-            // บังคับให้ต้องใส่รหัสผ่านก่อนออก หรือทำข้อสอบให้เสร็จเท่านั้น
             window.onbeforeunload = (e) => {
                 if (isExamFinished) return;
                 this.handleCloseAttempt();
@@ -69,10 +68,43 @@ define(['jquery', 'core/log', 'https://cdn.jsdelivr.net/npm/sweetalert2@11'], fu
 
             this.observeSubmitButton();
         },
-
+  // ── helpers ดึงข้อมูลจาก DOM ของ Moodle ─────────────────────────────
+        getQuizName: function() {
+            const el = document.querySelector(
+                '.page-header-headings h1, ' +
+                '.activity-header .activity-name, ' +
+                '.activityname .instancename, ' +
+                'h1.h2, h1'
+            );
+            return el ? el.textContent.trim().replace(/\s+/g, ' ') : "";
+        },
+ 
+        getQuizIconSrc: function() {
+            const el = document.querySelector(
+                '.activityiconcontainer img, ' +
+                '.activity-header img.icon, ' +
+                '.activityicon img'
+            );
+            return el ? (el.src || '') : '';
+        },
+ 
+        getBreadcrumb: function() {
+            const el = document.querySelector(
+                '.breadcrumb, nav[aria-label="Navigation bar"] ol, #page-navbar .breadcrumb'
+            );
+            if (!el) return "";
+            const parts = [];
+            el.querySelectorAll('li').forEach(li => {
+                const text = li.textContent.trim().replace(/\s+/g, ' ');
+                if (text) parts.push(text);
+            });
+            return parts.join(' / ');
+        },
+        // ─────────────────────────────────────────────────────────────────────
+ 
         removeBackButtons: function() {
             const findAndHide = () => {
-                // selector ครอบคลุม Moodle 4.x และ 5.x
+
                 $(`.back-link, .mod_quiz-back-link, button[name="backbutton"], .backbutton,
                    [data-action="previous"], .qnbutton.thispage,
                    #mod_quiz_navblock, .mod_quiz-prev-nav,
@@ -90,7 +122,6 @@ define(['jquery', 'core/log', 'https://cdn.jsdelivr.net/npm/sweetalert2@11'], fu
                     }
                 });
 
-                // ปิด drawer ถ้า Moodle เปิดไว้ (class="show" หรือ aria-expanded="true")
                 const drawer = document.getElementById('nav-drawer') ||
                                document.querySelector('[data-region="navigation-drawer"]') ||
                                document.querySelector('[data-region="drawer"]');
@@ -102,7 +133,6 @@ define(['jquery', 'core/log', 'https://cdn.jsdelivr.net/npm/sweetalert2@11'], fu
             findAndHide();
             setInterval(findAndHide, 1000);
 
-            // MutationObserver ดักจับ element ที่ Moodle inject ทีหลัง
             const observer = new MutationObserver(() => { findAndHide(); });
             observer.observe(document.body, { childList: true, subtree: true });
         },
@@ -141,7 +171,7 @@ define(['jquery', 'core/log', 'https://cdn.jsdelivr.net/npm/sweetalert2@11'], fu
                         ? M.cfg.wwwroot + '/course/view.php?id=' + studentData.courseid
                         : M.cfg.wwwroot;
 
-                    // ออกจาก fullscreen ก่อน แล้วค่อย redirect
+                 
                     const exitFs = document.exitFullscreen
                         || document.webkitExitFullscreen
                         || document.mozCancelFullScreen
@@ -211,6 +241,43 @@ define(['jquery', 'core/log', 'https://cdn.jsdelivr.net/npm/sweetalert2@11'], fu
                     color: white; border: 1px solid rgba(255,255,255,0.2);
                     border-radius: 8px; cursor: pointer; backdrop-filter: blur(4px);
                 }
+
+                
+                /* นาฬิกา มุมล่างขวา */
+#sut-clock {
+    /* ตำแหน่งและการจัดวาง */
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 9999;
+    
+    /* สไตล์หลัก */
+    background: #FF5F00;
+    backdrop-filter: blur(6px);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 10px;
+    padding: 8px 16px;
+    color: #ffffff;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    font-variant-numeric: tabular-nums;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    user-select: none !important;
+
+    /* ส่วนที่เพิ่ม: ความจางในโหมดปกติและการหน่วงเวลา */
+    opacity: 0.2; /* จางลงมากเพื่อไม่ให้กวนสายตา */
+    transition: all 0.3s ease-in-out; /* ทำให้การเปลี่ยนแปลงนุ่มนวล */
+    cursor: default;
+}
+
+/* เมื่อเอาเมาส์ไปชี้ (Hover) */
+#sut-clock:hover {
+    opacity: 1; /* กลับมาชัดเจน 100% */
+    transform: scale(1.05); /* ขยายขนาดขึ้นเล็กน้อยเพื่อให้ดูเด่น */
+    box-shadow: 0 6px 20px rgba(0,0,0,0.5); /* เพิ่มเงาให้ดูมีมิติขึ้น */
+}
+
 
                 /* ซ่อน UI ที่ไม่เกี่ยวกับการสอบทั้งหมด */
 
@@ -293,7 +360,6 @@ define(['jquery', 'core/log', 'https://cdn.jsdelivr.net/npm/sweetalert2@11'], fu
             document.addEventListener('keydown', (e) => {
                 if (isExamFinished) return;
 
-                // ถ้า overlay ล็อคแสดงอยู่ บล็อคทุกปุ่มเลย
                 if (document.getElementById("custom-alert-overlay")) {
                     e.preventDefault();
                     e.stopImmediatePropagation();
@@ -302,14 +368,13 @@ define(['jquery', 'core/log', 'https://cdn.jsdelivr.net/npm/sweetalert2@11'], fu
 
                 const key = e.key.toLowerCase();
 
-                // บล็อค Ctrl/Meta + Keys
                 if (e.metaKey || e.ctrlKey) {
                     if (['s', 'p', 'c', 'v', 'u', 'r', 'w', 'q', 't', 'n'].includes(key)) {
                         e.preventDefault();
                         e.stopPropagation();
                         return false;
                     }
-                    // บล็อค Windows+Shift+S (Snipping Tool)
+
                     if (e.shiftKey && key === 's') {
                         e.preventDefault();
                         e.stopPropagation();
@@ -317,31 +382,25 @@ define(['jquery', 'core/log', 'https://cdn.jsdelivr.net/npm/sweetalert2@11'], fu
                     }
                 }
 
-                // บล็อคปุ่มเดี่ยวๆ
-                // หมายเหตุ: F11 และ ESC ทำงานระดับ OS จึง block โดยตรงไม่ได้
-                // แต่จะถูกจัดการผ่าน fullscreenchange event แทน
                 const forbiddenKeys = ['f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'f11','f12' , 'escape', 'printscreen'];
                 if (forbiddenKeys.includes(key)) {
                     e.preventDefault();
                     e.stopPropagation();
                     return false;
                 }
-
-                // อนุญาต Tab (เลื่อนช่อง input) แต่บล็อค Shift+Tab (ย้อนกลับ)
                 if (key === 'tab' && e.shiftKey) {
                     e.preventDefault();
                     e.stopPropagation();
                     return false;
                 }
 
-                // บล็อค Alt ทุกกรณี (รวม Alt+Tab, Alt+F4)
                 if (e.altKey) {
                     e.preventDefault();
                     e.stopPropagation();
                     return false;
                 }
 
-            }, true); // useCapture = true เพื่อดักก่อน event อื่น
+            }, true); 
         },
 
         setupScreenshotDetection: function() {
@@ -349,8 +408,7 @@ define(['jquery', 'core/log', 'https://cdn.jsdelivr.net/npm/sweetalert2@11'], fu
             window.addEventListener('blur', () => {
                 if (isExamFinished) return;
                 if (document.getElementById("custom-alert-overlay")) return;
-                // delay 300ms เพื่อให้ SweetAlert มีเวลา render ก่อนตรวจสอบ
-                // ป้องกัน false positive ตอนกดปุ่มหยุดสอบ
+
                 clearTimeout(blurTimer);
                 blurTimer = setTimeout(() => {
                     if (isExamFinished) return;
@@ -361,21 +419,18 @@ define(['jquery', 'core/log', 'https://cdn.jsdelivr.net/npm/sweetalert2@11'], fu
                 }, 300);
             });
 
-            // ถ้า focus กลับมา ยกเลิก timer (กรณีสลับแป้บเดียวแล้วกลับ)
             window.addEventListener('focus', () => {
                 clearTimeout(blurTimer);
             });
         },
 
-        // overlay ล็อคเมื่อหลุด fullscreen หรือสลับหน้าจอ
+
         handleViolation: function(title, desc) {
-            // ลบ overlay เก่าก่อน แล้วสร้างใหม่เสมอ
+
             const existing = document.getElementById("custom-alert-overlay");
             if (existing) existing.remove();
             Swal.close();
-            // *** ไม่เรียก exitFullscreen ที่นี่ เพราะจะทำให้เกิด fullscreenchange event ซ้ำ
-            // และทำให้ overlay ถูกสร้าง-ลบวนซ้ำ ***
-
+  
             let warningDiv = document.createElement("div");
             warningDiv.id = "custom-alert-overlay";
             warningDiv.className = "sut-overlay";
@@ -388,7 +443,6 @@ define(['jquery', 'core/log', 'https://cdn.jsdelivr.net/npm/sweetalert2@11'], fu
                 </div>`;
             document.body.appendChild(warningDiv);
 
-            // บล็อค keyboard ทุกปุ่มขณะ overlay แสดงอยู่
             const blockAll = (e) => {
                 e.preventDefault();
                 e.stopImmediatePropagation();
@@ -402,7 +456,6 @@ define(['jquery', 'core/log', 'https://cdn.jsdelivr.net/npm/sweetalert2@11'], fu
             };
         },
 
-        // overlay เมื่อพยายามปิดหน้าต่าง บังคับให้กลับเข้าสอบหรือใส่รหัสออก
         handleCloseAttempt: function() {
             if (document.getElementById("custom-alert-overlay")) return;
 
@@ -441,18 +494,36 @@ define(['jquery', 'core/log', 'https://cdn.jsdelivr.net/npm/sweetalert2@11'], fu
             if (rfs) rfs.call(elem).catch(() => {});
         },
 
-        setupStartButton: function() {
+      setupStartButton: function() {
             if (document.querySelector(".sut-overlay")) return;
-
+ 
+            const quizName   = this.getQuizName();
+            const iconSrc    = this.getQuizIconSrc();
+            const breadcrumb = this.getBreadcrumb();
+ 
+            const iconHTML = iconSrc
+                ? `<img src="${iconSrc}" style="width:36px;height:36px;object-fit:contain;flex-shrink:0;">`
+                : `<span style="font-size:32px;line-height:1;flex-shrink:0;">📝</span>`;
+ 
             let overlay = document.createElement("div");
             overlay.className = "sut-overlay";
             overlay.innerHTML = `
-                <div class="sut-modal" style="max-width:480px;">
-                    <div style="font-size: 48px; margin-bottom: 12px;">🔒</div>
-                    <div style="font-size: 20px; font-weight: 700; color: #0f172a; margin-bottom: 20px;">
+                <div class="sut-modal" style="max-width:500px;text-align:left;">
+                    <div style="font-size:11px;font-weight:600;letter-spacing:1px;color:#94a3b8;
+                                text-transform:uppercase;margin-bottom:16px;text-align:center;">
                         SUT Exam Protector
                     </div>
-                    <div style="font-size:12px; color:#94a3b8; margin-bottom:4px;">
+                    ${breadcrumb ? `
+                    <div style="font-size:13px;color:#2563eb;font-weight:500;margin-bottom:12px;">
+                        ${breadcrumb}
+                    </div>` : ''}
+                    <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
+                        ${iconHTML}
+                        <div style="font-size:20px;font-weight:700;color:#0f172a;line-height:1.3;">
+                            ${quizName || "ข้อสอบ"}
+                        </div>
+                    </div>
+                    <div style="font-size:12px;color:#94a3b8;margin-bottom:4px;text-align:center;">
                         ระบบจะทำงานในโหมดเต็มจอและล็อคการนำทาง
                     </div>
                     <button id="enter-btn" class="sut-btn">🚀 เริ่มทำข้อสอบ</button>
@@ -465,7 +536,6 @@ define(['jquery', 'core/log', 'https://cdn.jsdelivr.net/npm/sweetalert2@11'], fu
         },
 
         observeSubmitButton: function() {
-            // ดักปุ่ม submit/finish ทั้งจาก text และ name attribute (Moodle 5.x ใช้ name="next")
             $(document).on('click', 'button, input[type="submit"]', (e) => {
                 const el = $(e.currentTarget);
                 const text = (el.text() || el.val() || "").toLowerCase();
@@ -479,7 +549,6 @@ define(['jquery', 'core/log', 'https://cdn.jsdelivr.net/npm/sweetalert2@11'], fu
                 }
             });
 
-            // ดักการ submit form โดยตรง (Moodle บางเวอร์ชัน submit ผ่าน form แทนปุ่ม)
             $(document).on('submit', 'form', () => {
                 const form = $('form[action*="processattempt"], form[action*="finishattempt"]');
                 if (form.length) {
@@ -509,6 +578,26 @@ define(['jquery', 'core/log', 'https://cdn.jsdelivr.net/npm/sweetalert2@11'], fu
             btn.id = "sut-pause-btn";
             btn.onclick = () => this.triggerPauseAction();
             document.body.appendChild(btn);
-        }
+        },
+             // นาฬิกาแสดงเวลาปัจจุบัน มุมล่างขวา
+        createClockWidget: function() {
+            if (document.getElementById("sut-clock")) return;
+
+            const clock = document.createElement("div");
+            clock.id = "sut-clock";
+            clock.innerHTML = `<span id="sut-clock-time">00:00:00</span>`;
+            document.body.appendChild(clock);
+
+            const updateClock = () => {
+                const now = new Date();
+                const h = String(now.getHours()).padStart(2, '0');
+                const m = String(now.getMinutes()).padStart(2, '0');
+                const s = String(now.getSeconds()).padStart(2, '0');
+                const el = document.getElementById("sut-clock-time");
+                if (el) el.textContent = `${h}:${m}:${s}`;
+            };
+            updateClock();
+            setInterval(updateClock, 1000);
+        },
     };
 });
