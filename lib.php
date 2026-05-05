@@ -13,7 +13,7 @@ $mform->addElement('header', 'sutexam_protector_hdr', get_string('sutexam_protec
 $mform->addElement('selectyesno', 'sutenabled', get_string('sutenabled', 'local_sutexam_protector'));
 $mform->addHelpButton('sutenabled', 'sutenabled', 'local_sutexam_protector');
 
-$mform->addElement('text', 'sutpassword', get_string('sutpassword', 'local_sutexam_protector'), array('size' => '20'));
+$mform->addElement('passwordunmask', 'sutpassword', get_string('sutpassword', 'local_sutexam_protector'), array('size' => '20'));
 $mform->addHelpButton('sutpassword', 'sutpassword', 'local_sutexam_protector');
         // แสดงช่องกรอกรหัสเฉพาะเมื่อเลือก "Yes" ใน sutenabled
         $mform->hideIf('sutpassword', 'sutenabled', 'eq', 0);
